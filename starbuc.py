@@ -659,9 +659,9 @@ elif slide == "🎯 Mercados meta":
     st.markdown("<br><hr>", unsafe_allow_html=True)
 
     # ─────────────────────────────────────────────────────────────────────────────
-    # BLOQUE 2: GRÁFICOS DE CONSUMO Y OPERACIONES
+    # BLOQUE 2: GRÁFICOS DE CONSUMO
     # ─────────────────────────────────────────────────────────────────────────────
-    st.markdown("### 2. Patrones Operacionales y Hábitos de Consumo")
+    st.markdown("### 2. Hábitos de Consumo")
     
     seg_names = ["Potencial + Smart Coffee", "Estrella + Smart Coffee", "Potencial + Classic n Quick"]
     seg_colors = ["#00d26a", "#3b82f6", "#f59e0b"]
