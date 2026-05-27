@@ -4,7 +4,7 @@ Instalar una sola vez:
     pip install streamlit pandas numpy matplotlib seaborn
 
 Ejecutar desde la carpeta donde esté este archivo:
-    streamlit run presentacion_v5.py
+    streamlit run starbuc.py
 
 Actualizaciones de esta versión:
 - Segmentación Sociodemográfica actualizada a StepMix Mixto (k=5).
@@ -507,28 +507,69 @@ elif slide == "📈 Segmentación RFM":
 
     with col_main:
         np.random.seed(42)
-        segs, freqs, monets = [], [], []
-        # Parámetros ajustados a los nuevos promedios del notebook
-        params = [(4.2, 61.2, 2, 15), (9.4, 142.8, 4, 30), (5.5, 80.3, 2.5, 20)]
+        # 1. Agregamos la lista para Recency
+        segs, freqs, monets, recens = [], [], [], [] 
+        
+        # 2. Actualizamos parámetros para incluir la media y desv. estándar de Recency
+        # Orden: (Freq_mu, Monet_mu, Recency_mu, Freq_sd, Monet_sd, Recency_sd)
+        params = [
+            (4.2, 61.2, 296.9, 2, 15, 40),   # Espontáneo
+            (9.4, 142.8, 70.4, 4, 30, 15),   # Estrella
+            (5.5, 80.3, 76.0, 2.5, 20, 20)   # Potencial
+        ]
         sizes = [90, 175, 245]
-        for i, (fmu, mmu, fsd, msd) in enumerate(params):
+        
+        for i, (fmu, mmu, rmu, fsd, msd, rsd) in enumerate(params):
             segs += [i] * sizes[i]
             freqs += list(np.random.normal(fmu, fsd, sizes[i]).clip(1, 40))
             monets += list(np.random.normal(mmu, msd, sizes[i]).clip(10))
-
-        fig, ax = plt.subplots(figsize=(7.6, 4.6))
+            recens += list(np.random.normal(rmu, rsd, sizes[i]).clip(1)) # Simulamos la tercera dimensión
+            
+        fig = plt.figure(figsize=(7.6, 5.2))
+        # 3. Activamos la proyección 3D
+        ax = fig.add_subplot(111, projection='3d')
+        
+        # Adaptamos el fondo 3D a tu paleta oscura de Streamlit
+        fig.patch.set_facecolor('#111827')
+        ax.set_facecolor('#111827')
+        pane_color = (0.117, 0.161, 0.231, 0.8) # Color #1e293b con algo de transparencia
+        ax.xaxis.set_pane_color(pane_color)
+        ax.yaxis.set_pane_color(pane_color)
+        ax.zaxis.set_pane_color(pane_color)
+        ax.grid(color='#475569', alpha=0.3)
+        
         for i, (label, color) in enumerate(zip(["Espontáneo", "Estrella", "Potencial"], PALETTE_RFM)):
             mask = np.array(segs) == i
-            ax.scatter(np.array(freqs)[mask], np.array(monets)[mask], c=color, alpha=0.58, s=28, label=label)
-            ax.scatter(np.mean(np.array(freqs)[mask]), np.mean(np.array(monets)[mask]), c=color, s=230, marker="X", edgecolor="#f8fafc", linewidth=1.8)
-        ax.set_xlabel("Frecuencia (n° órdenes)")
-        ax.set_ylabel("Gasto total (USD)")
-        ax.set_title("Frecuencia vs gasto total por segmento RFM")
-        ax.legend(markerscale=1.4, fontsize=9, facecolor="#1e293b", edgecolor="#64748b")
-        st.pyplot(finish_plot(fig, ax), use_container_width=True)
+            x = np.array(recens)[mask]
+            y = np.array(freqs)[mask]
+            z = np.array(monets)[mask]
+            
+            # Gráfico de dispersión 3D
+            ax.scatter(x, y, z, c=color, alpha=0.58, s=28, label=label)
+            # Centroides
+            ax.scatter(np.mean(x), np.mean(y), np.mean(z), c=color, s=230, marker="X", edgecolor="#f8fafc", linewidth=1.8, depthshade=False)
+            
+        ax.set_xlabel("Recency (días)", color="#cbd5e1", labelpad=8)
+        ax.set_ylabel("Frecuencia", color="#cbd5e1", labelpad=8)
+        ax.set_zlabel("Gasto total (USD)", color="#cbd5e1", labelpad=8)
+        ax.set_title("Espacio RFM 3D por segmento", color="#f8fafc", pad=15)
+        
+        # Pintar los números de los ejes para que se vean en fondo oscuro
+        ax.tick_params(axis='x', colors='#cbd5e1')
+        ax.tick_params(axis='y', colors='#cbd5e1')
+        ax.tick_params(axis='z', colors='#cbd5e1')
+        
+        # 4. Ajustar el ángulo de cámara (igual que el de tu notebook)
+        ax.view_init(elev=20, azim=45)
+        
+        ax.legend(markerscale=1.4, fontsize=9, facecolor="#1e293b", edgecolor="#64748b", labelcolor="#f8fafc")
+        
+        # Evitamos pasar por finish_plot ya que en 3D los ejes no manejan "spines"
+        st.pyplot(fig, use_container_width=True)
         plt.close()
+        
         st.markdown("<p class='metric-note'>Las X marcan el centro aproximado de cada segmento.</p>", unsafe_allow_html=True)
-
+   
     with col_side:
         for _, row in rfm_profiles.iterrows():
             st.markdown(
@@ -659,9 +700,9 @@ elif slide == "🎯 Mercados meta":
     st.markdown("<br><hr>", unsafe_allow_html=True)
 
     # ─────────────────────────────────────────────────────────────────────────────
-    # BLOQUE 2: GRÁFICOS DE CONSUMO
+    # BLOQUE 2: GRÁFICOS DE CONSUMO Y OPERACIONES
     # ─────────────────────────────────────────────────────────────────────────────
-    st.markdown("### 2. Hábitos de Consumo")
+    st.markdown("### 2. Patrones Operacionales y Hábitos de Consumo")
     
     seg_names = ["Potencial + Smart Coffee", "Estrella + Smart Coffee", "Potencial + Classic n Quick"]
     seg_colors = ["#00d26a", "#3b82f6", "#f59e0b"]
@@ -670,17 +711,21 @@ elif slide == "🎯 Mercados meta":
 
     with tab_bebidas:
         bebidas = ["Brewed Coffee", "Espresso", "Frappuccino", "Refresher", "Tea", "Other"]
+        
+        # Datos reales extraídos del notebook
         data_bebidas = {
-            "Potencial + Smart Coffee": [5, 10, 15, 30, 35, 5],
-            "Estrella + Smart Coffee": [10, 25, 5, 40, 15, 5],
-            "Potencial + Classic n Quick": [45, 10, 0, 30, 10, 5]
+            "Potencial + Smart Coffee": [16.1, 16.7, 16.7, 16.9, 17.1, 16.6],
+            "Estrella + Smart Coffee": [16.9, 16.4, 16.6, 17.3, 16.0, 16.8],
+            "Potencial + Classic n Quick": [17.1, 16.1, 16.8, 17.1, 16.3, 16.5]
         }
+        
         x = np.arange(len(bebidas))
         width = 0.22
         
         fig_b, ax_b = plt.subplots(figsize=(10, 4))
         for i, (name, color) in enumerate(zip(seg_names, seg_colors)):
             ax_b.bar(x + (width * i) - width, data_bebidas[name], width, label=name, color=color, alpha=0.85)
+        
         ax_b.set_ylabel("% de Preferencia")
         ax_b.set_xticks(x)
         ax_b.set_xticklabels(bebidas, fontsize=9)
@@ -689,56 +734,91 @@ elif slide == "🎯 Mercados meta":
         plt.close()
 
     with tab_horarios:
-        horas_suaves = np.linspace(6, 20, 200)
-        vol_pot_smart = np.exp(-0.5*((horas_suaves-9)/1.5)**2)*50 + np.exp(-0.5*((horas_suaves-15)/2)**2)*70 + 10
-        vol_est_smart = np.exp(-0.5*((horas_suaves-8)/1.5)**2)*80 + np.exp(-0.5*((horas_suaves-14)/2)**2)*60 + 15
-        vol_classic = np.exp(-0.5*((horas_suaves-7.5)/2)**2)*90 + np.exp(-0.5*((horas_suaves-16)/2)**2)*10 + 5
+        # Horas del día (0:00 a 23:00)
+        horas = list(range(24))
+        
+        # Datos reales extraídos del notebook
+        data_horas = {
+            "Potencial + Smart Coffee": [51, 43, 59, 45, 116, 253, 957, 1221, 993, 740, 595, 878, 1022, 751, 575, 779, 898, 710, 484, 423, 261, 150, 108, 54],
+            "Estrella + Smart Coffee": [80, 76, 61, 82, 163, 401, 1527, 1908, 1568, 1159, 855, 1366, 1536, 1196, 887, 1163, 1359, 1194, 798, 643, 365, 232, 138, 92],
+            "Potencial + Classic n Quick": [33, 33, 34, 30, 73, 162, 661, 825, 662, 511, 371, 593, 652, 479, 385, 508, 648, 476, 309, 247, 156, 106, 81, 33]
+        }
         
         fig_h, ax_h = plt.subplots(figsize=(10, 4))
-        for vol, name, color in zip([vol_pot_smart, vol_est_smart, vol_classic], seg_names, seg_colors):
-            ax_h.plot(horas_suaves, vol, linewidth=2.8, label=name, color=color)
-            ax_h.fill_between(horas_suaves, vol, alpha=0.10, color=color)
+        
+        # Suavizado de curva usando scipy para que luzca profesional y no angular
+        from scipy.interpolate import make_interp_spline
+        x = np.array(horas)
+        x_smooth = np.linspace(x.min(), x.max(), 200)
+        
+        for name, color in zip(seg_names, seg_colors):
+            y = np.array(data_horas[name])
+            
+            # Aplicar la interpolación
+            spl = make_interp_spline(x, y, k=3)
+            y_smooth = spl(x_smooth)
+            # Asegurar que la curva no baje de cero transacciones por el suavizado
+            y_smooth = np.maximum(y_smooth, 0) 
+            
+            ax_h.plot(x_smooth, y_smooth, linewidth=2.8, label=name, color=color)
+            ax_h.fill_between(x_smooth, y_smooth, alpha=0.10, color=color)
+            
         ax_h.set_xlabel("Hora del Día")
-        ax_h.set_yticks([])
-        horas_ticks = np.arange(6, 21, 2)
+        ax_h.set_ylabel("Volumen de Transacciones")
+        ax_h.set_xlim(0, 23)
+        ax_h.set_yticks([]) # Ocultar los números del eje Y para un look más limpio
+        
+        # Ticks del eje X cada 2 horas
+        horas_ticks = np.arange(0, 24, 2)
         ax_h.set_xticks(horas_ticks)
         ax_h.set_xticklabels([f"{h}:00" for h in horas_ticks], fontsize=9)
+        
         ax_h.legend(fontsize=8, facecolor="#1e293b", edgecolor="#64748b")
         st.pyplot(finish_plot(fig_h, ax_h), use_container_width=True)
         plt.close()
-
+        
     with tab_ubicaciones:
         col_l, col_r = st.columns(2)
         locales = ["Rural", "Suburban", "Urban"]
+        regiones = ["Midwest", "Northeast", "Southwest", "Southeast", "West"]
+        
+        # Datos reales extraídos del notebook
         data_locales = {
-            "Potencial + Smart Coffee": [55, 30, 15], "Estrella + Smart Coffee": [20, 55, 25], "Potencial + Classic n Quick": [65, 25, 10]
+            "Potencial + Smart Coffee": [31.2, 35.8, 33.0],
+            "Estrella + Smart Coffee": [31.5, 35.9, 32.7],
+            "Potencial + Classic n Quick": [31.0, 35.3, 33.7]
         }
-        x_l = np.arange(len(locales))
+        
+        data_regiones = {
+            "Potencial + Smart Coffee": [18.9, 17.6, 19.9, 20.7, 22.8],
+            "Estrella + Smart Coffee": [19.4, 18.3, 19.2, 20.0, 23.1],
+            "Potencial + Classic n Quick": [20.2, 18.3, 19.1, 20.3, 22.2]
+        }
         
         with col_l:
+            x_l = np.arange(len(locales))
             fig_l, ax_l = plt.subplots(figsize=(5, 3.5))
             for i, (name, color) in enumerate(zip(seg_names, seg_colors)):
                 ax_l.bar(x_l + (0.2 * i) - 0.2, data_locales[name], 0.2, label=name, color=color, alpha=0.85)
+            
             ax_l.set_title("Distribución por Tipo de Local")
-            ax_l.set_xticks(x_l); ax_l.set_xticklabels(locales, fontsize=9)
+            ax_l.set_ylabel("% de transacciones")
+            ax_l.set_xticks(x_l)
+            ax_l.set_xticklabels(locales, fontsize=9)
             st.pyplot(finish_plot(fig_l, ax_l), use_container_width=True)
             plt.close()
             
         with col_r:
-            regiones = ["Midwest", "Northeast", "Southwest", "Otros"]
-            data_regiones = {
-                "Potencial + Smart Coffee": [48, 12, 18, 22], "Estrella + Smart Coffee": [42, 22, 12, 24], "Potencial + Classic n Quick": [52, 10, 15, 23]
-            }
             x_r = np.arange(len(regiones))
             fig_r, ax_r = plt.subplots(figsize=(5, 3.5))
             for i, (name, color) in enumerate(zip(seg_names, seg_colors)):
                 ax_r.bar(x_r + (0.2 * i) - 0.2, data_regiones[name], 0.2, label=name, color=color, alpha=0.85)
+            
             ax_r.set_title("Distribución Geográfica")
-            ax_r.set_xticks(x_r); ax_r.set_xticklabels(regiones, fontsize=9)
+            ax_r.set_xticks(x_r)
+            ax_r.set_xticklabels(regiones, fontsize=8, rotation=15)
             st.pyplot(finish_plot(fig_r, ax_r), use_container_width=True)
             plt.close()
-
-    st.markdown("<br><hr>", unsafe_allow_html=True)
 
     # ─────────────────────────────────────────────────────────────────────────────
     # BLOQUE 3: DESCRIPCIÓN ESTRATÉGICA / PROPUESTA DE VALOR
