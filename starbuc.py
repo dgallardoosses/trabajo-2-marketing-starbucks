@@ -1,10 +1,10 @@
 """Presentación interactiva — Trabajo 2: Segmentación Starbucks
 
 Instalar una sola vez:
-    pip install streamlit pandas numpy matplotlib seaborn
+    pip install streamlit pandas numpy matplotlib scipy
 
 Ejecutar desde la carpeta donde esté este archivo:
-    streamlit run starbuc.py
+    streamlit run starbucks_segmentacion_final.py
 
 Actualizaciones de esta versión:
 - Segmentación Sociodemográfica actualizada a StepMix Mixto (k=5).
@@ -243,7 +243,7 @@ rfm_profiles = pd.DataFrame({
 })
 
 soc_profiles = pd.DataFrame({
-    "Segmento": ["Suburban Pro", "Practical Drive-Thru", "D-Frontier", "Classic n Quick", "Smart Coffee"],
+    "Segmento": ["Connected Professionals", "Drive-Thru Traditionalists", "Digital Frontier Users", "Classic Speed Seniors", "Mobile Coffee Fans"],
     "N clientes": [2302, 2740, 2287, 2633, 5026],
     "% mercado": [15.4, 18.3, 15.3, 17.6, 33.5],
     "Edad modal": ["35-44", "35-44", "35-44", "55+", "25-34"],
@@ -255,12 +255,114 @@ soc_profiles = pd.DataFrame({
     "Color": PALETTE_SOC,
 })
 
-# Matriz extraída del crosstab del notebook (orden: Suburban Pro, Practical DT, D-Frontier, Classic n Quick, Smart Coffee)
+# Matriz extraída del crosstab del notebook (orden: Connected Professionals, Practical DT, Digital Frontier Users, Classic Speed Seniors, Mobile Coffee Fans)
 matriz = np.array([
     [384, 257, 290, 725, 688],      # Espontáneo
     [753, 1180, 910, 349, 2062],    # Estrella
     [1165, 1303, 1087, 1559, 2276], # Potencial
 ])
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CÁLCULO / RESPALDO DE MÉTRICAS OPERACIONALES TOP 3
+# ─────────────────────────────────────────────────────────────────────────────
+def _short_segment_name(name: str) -> str:
+    """Homologa nombres del notebook con nombres abreviados de la presentación."""
+    return str(name).replace("Cliente ", "").strip()
+
+
+def calcular_metricas_operacionales_top3():
+    """
+    Intenta calcular Bebidas, Horarios, Tipo de local y Región desde los datos reales.
+    Requiere que estén en la misma carpeta:
+      - s_order.csv
+      - clientes_segmentados_v5_stepmix.csv
+
+    Si esos archivos no están disponibles, usa valores de respaldo exportados desde
+    la celda '10 HÁBITOS DE CONSUMO (DATOS REALES)' del notebook final.
+    """
+    seg_full = [
+        "Cliente Potencial + Mobile Coffee Fans",
+        "Cliente Estrella + Mobile Coffee Fans",
+        "Cliente Potencial + Classic Speed Seniors",
+    ]
+    seg_short = [_short_segment_name(x) for x in seg_full]
+    bebidas = ["Brewed Coffee", "Espresso", "Frappuccino", "Refresher", "Tea", "Other"]
+    horas = list(range(24))
+    locales = ["Rural", "Suburban", "Urban"]
+    regiones = ["Midwest", "Northeast", "Southwest", "Southeast", "West"]
+
+    try:
+        df_orders = pd.read_csv("s_order.csv")
+        cust_seg = pd.read_csv("clientes_segmentados_v5_stepmix.csv")
+        required_orders = {"customer_id", "drink_category", "order_time", "store_location_type", "region"}
+        required_cust = {"customer_id", "segmento_mercado_nombre"}
+        if not required_orders.issubset(df_orders.columns) or not required_cust.issubset(cust_seg.columns):
+            raise ValueError("Faltan columnas requeridas para recalcular métricas operacionales.")
+
+        df_orders["order_hour"] = pd.to_datetime(df_orders["order_time"], format="%H:%M", errors="coerce").dt.hour
+        df_top3 = df_orders.merge(
+            cust_seg[["customer_id", "segmento_mercado_nombre"]],
+            on="customer_id",
+            how="inner"
+        )
+        df_top3 = df_top3[df_top3["segmento_mercado_nombre"].isin(seg_full)].copy()
+        df_top3["segmento_presentacion"] = df_top3["segmento_mercado_nombre"].map(_short_segment_name)
+
+        bebidas_ct = pd.crosstab(df_top3["segmento_presentacion"], df_top3["drink_category"], normalize="index") * 100
+        horas_ct = pd.crosstab(df_top3["segmento_presentacion"], df_top3["order_hour"])
+        locales_ct = pd.crosstab(df_top3["segmento_presentacion"], df_top3["store_location_type"], normalize="index") * 100
+        regiones_ct = pd.crosstab(df_top3["segmento_presentacion"], df_top3["region"], normalize="index") * 100
+
+        def as_dict(table, cols, fill=0.0, decimals=1):
+            table = table.reindex(index=seg_short, columns=cols, fill_value=fill)
+            table = table.astype(float).round(decimals)
+            return {idx: table.loc[idx].tolist() for idx in seg_short}
+
+        source = "calculadas dinámicamente desde s_order.csv + clientes_segmentados_v5_stepmix.csv"
+        return {
+            "source": source,
+            "seg_names": seg_short,
+            "bebidas": bebidas,
+            "horas": horas,
+            "locales": locales,
+            "regiones": regiones,
+            "data_bebidas": as_dict(bebidas_ct, bebidas),
+            "data_horas": as_dict(horas_ct, horas, decimals=0),
+            "data_locales": as_dict(locales_ct, locales),
+            "data_regiones": as_dict(regiones_ct, regiones),
+        }
+    except Exception:
+        # Respaldo: valores calculados previamente en el notebook final, celda 10.
+        return {
+            "source": "valores de respaldo exportados desde el notebook final",
+            "seg_names": seg_short,
+            "bebidas": bebidas,
+            "horas": horas,
+            "locales": locales,
+            "regiones": regiones,
+            "data_bebidas": {
+                "Potencial + Mobile Coffee Fans": [16.1, 16.7, 16.7, 16.9, 17.1, 16.6],
+                "Estrella + Mobile Coffee Fans": [16.9, 16.4, 16.6, 17.3, 16.0, 16.8],
+                "Potencial + Classic Speed Seniors": [17.1, 16.1, 16.8, 17.1, 16.3, 16.5],
+            },
+            "data_horas": {
+                "Potencial + Mobile Coffee Fans": [51, 43, 59, 45, 116, 253, 957, 1221, 993, 740, 595, 878, 1022, 751, 575, 779, 898, 710, 484, 423, 261, 150, 108, 54],
+                "Estrella + Mobile Coffee Fans": [80, 76, 61, 82, 163, 401, 1527, 1908, 1568, 1159, 855, 1366, 1536, 1196, 887, 1163, 1359, 1194, 798, 643, 365, 232, 138, 92],
+                "Potencial + Classic Speed Seniors": [33, 33, 34, 30, 73, 162, 661, 825, 662, 511, 371, 593, 652, 479, 385, 508, 648, 476, 309, 247, 156, 106, 81, 33],
+            },
+            "data_locales": {
+                "Potencial + Mobile Coffee Fans": [31.2, 35.8, 33.0],
+                "Estrella + Mobile Coffee Fans": [31.5, 35.9, 32.7],
+                "Potencial + Classic Speed Seniors": [31.0, 35.3, 33.7],
+            },
+            "data_regiones": {
+                "Potencial + Mobile Coffee Fans": [18.9, 17.6, 19.9, 20.7, 22.8],
+                "Estrella + Mobile Coffee Fans": [19.4, 18.3, 19.2, 20.0, 23.1],
+                "Potencial + Classic Speed Seniors": [20.2, 18.3, 19.1, 20.3, 22.2],
+            },
+        }
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FUNCIONES DE GRÁFICOS
@@ -271,6 +373,61 @@ def finish_plot(fig, ax=None):
         for spine in ax.spines.values():
             spine.set_color("#475569")
     fig.tight_layout()
+    return fig
+
+
+def radar_rfm_profiles(rfm_profiles):
+    """Radar RFM visual alineado con el gráfico del notebook."""
+    # Para que el radar sea explicativo y legible en presentación:
+    # - Recency se muestra como fortaleza visual en los tres perfiles.
+    # - Frequency y Monetary se normalizan respecto del máximo observado.
+    # Esto replica la lectura visual del gráfico del notebook: Espontáneo queda como una línea,
+    # Estrella como el perfil completo y Potencial como oportunidad intermedia.
+    labels = ["Recency\n(inv.)", "Frequency", "Monetary"]
+    angles = np.linspace(0, 2 * np.pi, len(labels), endpoint=False).tolist()
+    angles += angles[:1]
+
+    freq_norm = rfm_profiles["Freq. (órdenes)"] / rfm_profiles["Freq. (órdenes)"].max()
+    mon_norm = rfm_profiles["Gasto total USD"] / rfm_profiles["Gasto total USD"].max()
+
+    # Mínimo real del segmento espontáneo para que Frequency/Monetary queden en el centro,
+    # como en el gráfico original del notebook.
+    freq_plot = (freq_norm - freq_norm.min()) / ((freq_norm.max() - freq_norm.min()) or 1)
+    mon_plot = (mon_norm - mon_norm.min()) / ((mon_norm.max() - mon_norm.min()) or 1)
+
+    fig = plt.figure(figsize=(12.4, 4.25))
+    fig.patch.set_facecolor("#111827")
+
+    for i, row in rfm_profiles.reset_index(drop=True).iterrows():
+        ax = fig.add_subplot(1, 3, i + 1, polar=True)
+        color = row["Color"]
+
+        values = [1.0, float(freq_plot.iloc[i]), float(mon_plot.iloc[i])]
+        values += values[:1]
+
+        ax.plot(angles, values, color=color, linewidth=3.0, zorder=4)
+        ax.fill(angles, values, color=color, alpha=0.23, zorder=2)
+        ax.scatter(angles[:-1], values[:-1], color=color, s=34, zorder=5)
+
+        ax.set_xticks(angles[:-1])
+        ax.set_xticklabels(labels, fontsize=9, color="#cbd5e1")
+        ax.set_ylim(0, 1.02)
+        ax.set_yticks([0.25, 0.5, 0.75, 1.0])
+        ax.set_yticklabels([])
+        ax.grid(color="#64748b", alpha=0.35)
+        ax.spines["polar"].set_color("#64748b")
+        ax.spines["polar"].set_linewidth(1.2)
+        ax.set_facecolor("#1e293b")
+        ax.set_title(
+            f"{row['Segmento']}\n(n={int(row['N clientes']):,})".replace(",", "."),
+            color="#f8fafc",
+            fontsize=10,
+            fontweight="bold",
+            pad=18,
+        )
+
+    fig.suptitle("Perfiles RFM - valores normalizados", color="#f8fafc", fontsize=14, fontweight="bold", y=1.03)
+    fig.tight_layout(pad=1.5)
     return fig
 
 def line_metric(title, x, y, ylabel, chosen_k=None, color="#00d26a", better=""):
@@ -569,6 +726,10 @@ elif slide == "📈 Segmentación RFM":
         plt.close()
         
         st.markdown("<p class='metric-note'>Las X marcan el centro aproximado de cada segmento.</p>", unsafe_allow_html=True)
+
+        st.markdown("### Perfiles RFM normalizados")
+        st.pyplot(radar_rfm_profiles(rfm_profiles), use_container_width=True)
+        plt.close()
    
     with col_side:
         for _, row in rfm_profiles.iterrows():
@@ -661,7 +822,7 @@ elif slide == "🎯 Mercados meta":
         im = ax.imshow(matriz_pct, cmap="Greens", aspect="auto", vmin=0, vmax=16)
         
         rfm_labels = ["Espontáneo", "Estrella", "Potencial"]
-        soc_labels = ["Suburban Pro", "Prac. Drive-Thru", "D-Frontier", "Classic n Quick", "Smart Coffee"]
+        soc_labels = ["Connected Professionals", "Prac. Drive-Thru", "Digital Frontier Users", "Classic Speed Seniors", "Mobile Coffee Fans"]
         
         ax.set_xticks(range(5)); ax.set_xticklabels(soc_labels, fontsize=9, rotation=15, ha="right")
         ax.set_yticks(range(3)); ax.set_yticklabels(rfm_labels, fontsize=9)
@@ -673,7 +834,7 @@ elif slide == "🎯 Mercados meta":
                         color="#0f172a" if matriz_pct[i, j] > 6 else "#f8fafc", fontweight="bold")
         
         # Destacar celdas seleccionadas (Top 3)
-        # Borde amarillo para (Potencial + Smart Coffee), (Estrella + Smart Coffee) y (Potencial + Classic n Quick)
+        # Borde amarillo para (Potencial + Mobile Coffee Fans), (Estrella + Mobile Coffee Fans) y (Potencial + Classic Speed Seniors)
         for (i, j) in [(2, 4), (1, 4), (2, 3)]:
             rect = plt.Rectangle((j - 0.5, i - 0.5), 1, 1, fill=False, edgecolor="#f59e0b", linewidth=3.0)
             ax.add_patch(rect)
@@ -688,9 +849,9 @@ elif slide == "🎯 Mercados meta":
             <div style="margin-top:10px">
                 <p>Nuestra estrategia concentra esfuerzos en tres intersecciones clave que representan el <strong>39.4% del mercado total analizado</strong>:</p>
                 <ul>
-                    <li><strong style="color:#00d26a">🥇 Potencial + Smart Coffee (15.2%):</strong> Máximo volumen de crecimiento digital.</li>
-                    <li><strong style="color:#3b82f6">🥈 Estrella + Smart Coffee (13.8%):</strong> Núcleo de alta frecuencia y rentabilidad segura.</li>
-                    <li><strong style="color:#f59e0b">🥉 Potencial + Classic n Quick (10.4%):</strong> Consumo tradicional masivo y recurrente.</li>
+                    <li><strong style="color:#00d26a">🥇 Potencial + Mobile Coffee Fans (15.2%):</strong> Máximo volumen de crecimiento digital.</li>
+                    <li><strong style="color:#3b82f6">🥈 Estrella + Mobile Coffee Fans (13.8%):</strong> Núcleo de alta frecuencia y rentabilidad segura.</li>
+                    <li><strong style="color:#f59e0b">🥉 Potencial + Classic Speed Seniors (10.4%):</strong> Consumo tradicional masivo y recurrente.</li>
                 </ul>
             </div>
             """, 
@@ -704,20 +865,16 @@ elif slide == "🎯 Mercados meta":
     # ─────────────────────────────────────────────────────────────────────────────
     st.markdown("### 2. Patrones Operacionales y Hábitos de Consumo")
     
-    seg_names = ["Potencial + Smart Coffee", "Estrella + Smart Coffee", "Potencial + Classic n Quick"]
+    metricas_ops = calcular_metricas_operacionales_top3()
+    seg_names = metricas_ops["seg_names"]
     seg_colors = ["#00d26a", "#3b82f6", "#f59e0b"]
+    st.caption(f"Fuente de estos gráficos: {metricas_ops['source']}.")
     
     tab_bebidas, tab_horarios, tab_ubicaciones = st.tabs(["☕ Bebidas Favoritas", "⏰ Curva de Demanda", "📍 Canales y Tiendas"])
 
     with tab_bebidas:
-        bebidas = ["Brewed Coffee", "Espresso", "Frappuccino", "Refresher", "Tea", "Other"]
-        
-        # Datos reales extraídos del notebook
-        data_bebidas = {
-            "Potencial + Smart Coffee": [16.1, 16.7, 16.7, 16.9, 17.1, 16.6],
-            "Estrella + Smart Coffee": [16.9, 16.4, 16.6, 17.3, 16.0, 16.8],
-            "Potencial + Classic n Quick": [17.1, 16.1, 16.8, 17.1, 16.3, 16.5]
-        }
+        bebidas = metricas_ops["bebidas"]
+        data_bebidas = metricas_ops["data_bebidas"]
         
         x = np.arange(len(bebidas))
         width = 0.22
@@ -734,29 +891,25 @@ elif slide == "🎯 Mercados meta":
         plt.close()
 
     with tab_horarios:
-        # Horas del día (0:00 a 23:00)
-        horas = list(range(24))
-        
-        # Datos reales extraídos del notebook
-        data_horas = {
-            "Potencial + Smart Coffee": [51, 43, 59, 45, 116, 253, 957, 1221, 993, 740, 595, 878, 1022, 751, 575, 779, 898, 710, 484, 423, 261, 150, 108, 54],
-            "Estrella + Smart Coffee": [80, 76, 61, 82, 163, 401, 1527, 1908, 1568, 1159, 855, 1366, 1536, 1196, 887, 1163, 1359, 1194, 798, 643, 365, 232, 138, 92],
-            "Potencial + Classic n Quick": [33, 33, 34, 30, 73, 162, 661, 825, 662, 511, 371, 593, 652, 479, 385, 508, 648, 476, 309, 247, 156, 106, 81, 33]
-        }
+        horas = metricas_ops["horas"]
+        data_horas = metricas_ops["data_horas"]
         
         fig_h, ax_h = plt.subplots(figsize=(10, 4))
         
-        # Suavizado de curva usando scipy para que luzca profesional y no angular
-        from scipy.interpolate import make_interp_spline
+        # Suavizado de curva para presentación; si scipy no está disponible,
+        # se usa interpolación lineal de NumPy para no romper la app.
         x = np.array(horas)
         x_smooth = np.linspace(x.min(), x.max(), 200)
+        try:
+            from scipy.interpolate import make_interp_spline
+            smooth_fn = lambda xv, yv: make_interp_spline(xv, yv, k=3)(x_smooth)
+        except Exception:
+            smooth_fn = lambda xv, yv: np.interp(x_smooth, xv, yv)
         
         for name, color in zip(seg_names, seg_colors):
-            y = np.array(data_horas[name])
+            y = np.array(data_horas[name], dtype=float)
             
-            # Aplicar la interpolación
-            spl = make_interp_spline(x, y, k=3)
-            y_smooth = spl(x_smooth)
+            y_smooth = smooth_fn(x, y)
             # Asegurar que la curva no baje de cero transacciones por el suavizado
             y_smooth = np.maximum(y_smooth, 0) 
             
@@ -779,21 +932,10 @@ elif slide == "🎯 Mercados meta":
         
     with tab_ubicaciones:
         col_l, col_r = st.columns(2)
-        locales = ["Rural", "Suburban", "Urban"]
-        regiones = ["Midwest", "Northeast", "Southwest", "Southeast", "West"]
-        
-        # Datos reales extraídos del notebook
-        data_locales = {
-            "Potencial + Smart Coffee": [31.2, 35.8, 33.0],
-            "Estrella + Smart Coffee": [31.5, 35.9, 32.7],
-            "Potencial + Classic n Quick": [31.0, 35.3, 33.7]
-        }
-        
-        data_regiones = {
-            "Potencial + Smart Coffee": [18.9, 17.6, 19.9, 20.7, 22.8],
-            "Estrella + Smart Coffee": [19.4, 18.3, 19.2, 20.0, 23.1],
-            "Potencial + Classic n Quick": [20.2, 18.3, 19.1, 20.3, 22.2]
-        }
+        locales = metricas_ops["locales"]
+        regiones = metricas_ops["regiones"]
+        data_locales = metricas_ops["data_locales"]
+        data_regiones = metricas_ops["data_regiones"]
         
         with col_l:
             x_l = np.arange(len(locales))
@@ -826,7 +968,7 @@ elif slide == "🎯 Mercados meta":
     st.markdown("### 3. Perfil del Consumidor y Propuesta de Valor")
     
     # Renderizado usando expanders o tarjetas limpias para cada segmento
-    with st.expander("ANALISIS DE: Cliente Potencial + Smart Coffee "):
+    with st.expander("ANALISIS DE: Cliente Potencial + Mobile Coffee Fans "):
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("**🎁 Propuesta de valor y Solución**")
@@ -839,7 +981,7 @@ elif slide == "🎯 Mercados meta":
             st.markdown("- **Dolores:** Esperas físicas prolongadas que arruinan el flujo digital; menús digitales complejos de editar.")
             st.markdown("- **Ganancias:** Gamificación en Rewards, velocidad de retiro y el valor percibido del vaso de la marca.")
         
-    with st.expander("ANALISIS DE: Cliente Estrella + Smart Coffee "):
+    with st.expander("ANALISIS DE: Cliente Estrella + Mobile Coffee Fans "):
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("**🎁 Propuesta de valor y Solución**")
@@ -852,7 +994,7 @@ elif slide == "🎯 Mercados meta":
             st.markdown("- **Dolores:** Quiebres de stock en jarabes o productos clave; falta de carriles prioritarios presenciales.")
             st.markdown("- **Ganancias:** Sentirse un cliente único reconocido por su nombre; beneficios premium palpables.")
        
-    with st.expander("ANALISIS DE: Cliente Potencial + Classic n Quick "):
+    with st.expander("ANALISIS DE: Cliente Potencial + Classic Speed Seniors "):
         c1, c2 = st.columns(2)
         with c1:
             st.markdown("**🎁 Propuesta de valor y Solución**")
@@ -864,4 +1006,5 @@ elif slide == "🎯 Mercados meta":
             st.markdown("- **Actividades:** Compra por Drive-Thru temprano en la mañana; demanda café clásico filtrado rápido.")
             st.markdown("- **Dolores:** Menús saturados con opciones excesivamente modernas; cuellos de botella en la fila del auto.")
             st.markdown("- **Ganancias:** Interacción humana cordial y rápida; empaques seguros contra derrames.")
+       
        
