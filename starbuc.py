@@ -282,24 +282,30 @@ def calcular_metricas_operacionales_top3():
     seg_full = list(SEGMENT_MAP.keys())
     seg_short = list(SEGMENT_MAP.values())
 
+    bebidas = ["Brewed Coffee", "Espresso", "Frappuccino", "Refresher", "Tea", "Other"]
+    horas = list(range(24))
+    locales = ["Rural", "Suburban", "Urban"]
+    regiones = ["Midwest", "Northeast", "Southwest", "Southeast", "West"]
+
     try:
         df_orders = pd.read_csv("s_order.csv")
         cust_seg = pd.read_csv("clientes_segmentados_v5_stepmix.csv")
 
-        # Normalizar nombres
-        cust_seg["segmento_mercado_nombre"] = cust_seg["segmento_mercado_nombre"].str.strip()
+        # Validar columnas necesarias
+        required_orders = {"customer_id", "drink_category", "order_time", "store_location_type", "region"}
+        required_cust = {"customer_id", "segmento_mercado_nombre"}
+        if not required_orders.issubset(df_orders.columns) or not required_cust.issubset(cust_seg.columns):
+            raise ValueError("Faltan columnas requeridas para recalcular métricas operacionales.")
 
+        # Extraer hora
         df_orders["order_hour"] = pd.to_datetime(df_orders["order_time"], format="%H:%M", errors="coerce").dt.hour
+
+        # Merge con segmentos
         df_top3 = df_orders.merge(cust_seg[["customer_id", "segmento_mercado_nombre"]], on="customer_id", how="inner")
         df_top3 = df_top3[df_top3["segmento_mercado_nombre"].isin(seg_full)].copy()
         df_top3["seg_label"] = df_top3["segmento_mercado_nombre"].map(SEGMENT_MAP)
 
         # Tablas cruzadas
-        bebidas = ["Brewed Coffee", "Espresso", "Frappuccino", "Refresher", "Tea", "Other"]
-        horas = list(range(24))
-        locales = ["Rural", "Suburban", "Urban"]
-        regiones = ["Midwest", "Northeast", "Southwest", "Southeast", "West"]
-
         bebidas_ct = pd.crosstab(df_top3["seg_label"], df_top3["drink_category"], normalize="index") * 100
         horas_ct = pd.crosstab(df_top3["seg_label"], df_top3["order_hour"])
         locales_ct = pd.crosstab(df_top3["seg_label"], df_top3["store_location_type"], normalize="index") * 100
@@ -323,8 +329,35 @@ def calcular_metricas_operacionales_top3():
             "data_regiones": as_dict(regiones_ct, regiones),
         }
     except Exception:
-        return {"source": "valores de respaldo exportados desde el notebook final"}
-
+        # Respaldo: valores fijos si no están los CSV
+        return {
+            "source": "valores de respaldo exportados desde el notebook final",
+            "seg_names": seg_short,
+            "bebidas": bebidas,
+            "horas": horas,
+            "locales": locales,
+            "regiones": regiones,
+            "data_bebidas": {
+                "Potential Smart Coffee": [16.1, 16.7, 16.7, 16.9, 17.1, 16.6],
+                "Smart Coffee Star": [16.9, 16.4, 16.6, 17.3, 16.0, 16.8],
+                "Potential Classic n Quick": [17.1, 16.1, 16.8, 17.1, 16.3, 16.5],
+            },
+            "data_horas": {
+                "Potential Smart Coffee": [51, 43, 59, 45, 116, 253, 957, 1221, 993, 740, 595, 878, 1022, 751, 575, 779, 898, 710, 484, 423, 261, 150, 108, 54],
+                "Smart Coffee Star": [80, 76, 61, 82, 163, 401, 1527, 1908, 1568, 1159, 855, 1366, 1536, 1196, 887, 1163, 1359, 1194, 798, 643, 365, 232, 138, 92],
+                "Potential Classic n Quick": [33, 33, 34, 30, 73, 162, 661, 825, 662, 511, 371, 593, 652, 479, 385, 508, 648, 476, 309, 247, 156, 106, 81, 33],
+            },
+            "data_locales": {
+                "Potential Smart Coffee": [31.2, 35.8, 33.0],
+                "Smart Coffee Star": [31.5, 35.9, 32.7],
+                "Potential Classic n Quick": [31.0, 35.3, 33.7],
+            },
+            "data_regiones": {
+                "Potential Smart Coffee": [18.9, 17.6, 19.9, 20.7, 22.8],
+                "Smart Coffee Star": [19.4, 18.3, 19.2, 20.0, 23.1],
+                "Potential Classic n Quick": [20.2, 18.3, 19.1, 20.3, 22.2],
+            },
+        }
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FUNCIONES DE GRÁFICOS
