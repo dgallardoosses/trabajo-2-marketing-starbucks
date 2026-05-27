@@ -249,7 +249,7 @@ rfm_profiles = pd.DataFrame({
 })
 
 soc_profiles = pd.DataFrame({
-    "Segmento": ["Connected Professionals", "Drive-Thru Traditionalists", "Digital Frontier Users", "Classic Speed Seniors", "Mobile Coffee Fans"],
+    "Segmento": ["Suburban Pro", "Practical Drive-Thru", "D-Frontiers", "Classic n Quick", "Smart Coffee"],
     "N clientes": [2302, 2740, 2287, 2633, 5026],
     "% mercado": [15.4, 18.3, 15.3, 17.6, 33.5],
     "Edad modal": ["35-44", "35-44", "35-44", "55+", "25-34"],
