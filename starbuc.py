@@ -739,7 +739,6 @@ elif slide == "📈 Segmentación RFM":
                     <span style="color:#cbd5e1">Frecuencia</span><span>{row['Freq. (órdenes)']} órdenes</span>
                     <span style="color:#cbd5e1">Gasto total</span><span>USD {row['Gasto total USD']}</span>
                     <span style="color:#cbd5e1">% mercado</span><span style="color:{row['Color']};font-weight:700">{row['% mercado']}%</span>
-                    <span style="color:#cbd5e1">Score</span><span style="color:{row['Color']};font-weight:700">{row['Score actividad']:.2f}</span>
                   </div>
                 </div>
                 """,
