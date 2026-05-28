@@ -244,7 +244,6 @@ rfm_profiles = pd.DataFrame({
     "% Rewards": [0.48, 0.48, 0.47],
     "% Order Ahead": [0.29, 0.32, 0.29],
     "Satisfacción": [3.69, 3.69, 3.69],
-    "Score actividad": [0.00, 1.00, 0.49],
     "Color": PALETTE_RFM,
 })
 
@@ -817,7 +816,7 @@ elif slide == "🎯 Mercados meta":
         im = ax.imshow(matriz_pct, cmap="Greens", aspect="auto", vmin=0, vmax=16)
         
         rfm_labels = ["Espontáneo", "Estrella", "Potencial"]
-        soc_labels = ["Connected Professionals", "Prac. Drive-Thru", "Digital Frontier Users", "Classic Speed Seniors", "Mobile Coffee Fans"]
+        soc_labels = ["Suburban Pro", "Practical Drive-Thru", "D-Frontiers", "Classic n Quick", "Smart Coffee"]
         
         ax.set_xticks(range(5)); ax.set_xticklabels(soc_labels, fontsize=9, rotation=15, ha="right")
         ax.set_yticks(range(3)); ax.set_yticklabels(rfm_labels, fontsize=9)
